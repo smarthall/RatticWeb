@@ -49,33 +49,49 @@ class BaseSchemeValidator(object):
         pass
 
 
-class HTTPValidator(BaseSchemeValidator):
-    netloc_regex = re.compile(
-        r'^((?P<userinfo>[-\w\d\._~:!$&\'\(\)\*,;=]+)@)?'  # User info
-        r'(?P<host>[\w\d\.]+)'  # Host
-        r'(:(?P<port>\d+))?$'  # Port
+class HostAuthorityValidationMixin:
+    netloc_splitter = re.compile(
+        r'^((?P<userinfo>[^@]+)@)?'  # User info
+        r'(?P<host>[^:]+)'           # Host
+        r'(:(?P<port>\d+))?$'        # Port
     )
 
-    def validate_netloc(self, netloc):
-        # Check for validity
-        match = self.netloc_regex.search(netloc)
-        if not match:
-            raise ValidationError('This does not appear to be a valid URL')
+    def validate_userinfo(self, userinfo):
+        # This should be validated elsewhere
+        pass
 
-        # Get components
-        (userinfo, host, port) = match.group('userinfo', 'host', 'port')
+    def validate_host(self, host):
+        pass
 
-        # Validate port
+    def validate_port(self, port):
         try:
             port = int(port, 10)
         except ValueError:
-            raise ValidationError('The port does not appear to be valid')
+            raise ValidationError('The port does not appear to be a number')
 
         if port < 0 or port > 65536:
             raise ValidationError('Port number out of range')
 
-        # TODO Validate userinfo, host
+    def validate_netloc(self, netloc):
+        # Check for validity
+        match = self.netloc_splitter.search(netloc)
+        if not match:
+            raise ValidationError('Could not validate the authority section of the URI')
+
+        # Get components
+        (userinfo, host, port) = match.group('userinfo', 'host', 'port')
+
+        # Validate Components
+        self.validate_host(host)
+        if userinfo is not None:
+            self.validate_userinfo(userinfo)
+        if port is not None:
+            self.validate_port(port)
         print userinfo, host, port
+
+
+class HTTPValidator(HostAuthorityValidationMixin, BaseSchemeValidator):
+    pass
 
 
 class URIValidator(object):
